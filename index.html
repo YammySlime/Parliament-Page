@@ -54,7 +54,7 @@ footer{padding-top:32px;display:flex;flex-direction:column;gap:6px;font-size:15p
 <body>
 <div class="wrap">
   <header>
-    <div class="school">國立臺北大學三峽校區學生議會</div>
+    <div class="school">[學校名稱] 學生議會</div>
     <h1>議案查詢</h1>
     <p class="intro">法案是學生議員或各級機關的提案。如果法案通過三峽校區學生議會和跨校區法案所必需的所有審查程序，並獲得公布，即可正式生效。</p>
   </header>
@@ -62,7 +62,7 @@ footer{padding-top:32px;display:flex;flex-direction:column;gap:6px;font-size:15p
   <section class="tools" aria-label="搜尋與篩選">
     <div>
       <label class="q" for="q">搜尋議案</label>
-      <input id="q" type="search" placeholder="例如：組織法、林某某、27-006" autocomplete="off">
+      <input id="q" type="search" placeholder="例如：圖書館、林○○、A-006" autocomplete="off">
     </div>
     <div class="row" role="group" aria-label="依分類篩選"><span class="tag">分類</span><span id="cats" class="row"></span></div>
     <div class="row" role="group" aria-label="依狀態篩選"><span class="tag">狀態</span><span id="stats" class="row"></span></div>
@@ -73,7 +73,7 @@ footer{padding-top:32px;display:flex;flex-direction:column;gap:6px;font-size:15p
 
   <footer>
     <div id="updated"></div>
-    <div>對議案內容有疑問，請洽議事組：ntpuscs@gmail.com</div>
+    <div>對議案內容有疑問，請洽議事組：[聯絡信箱或社群帳號]</div>
   </footer>
 </div>
 
@@ -89,8 +89,8 @@ const ALIASES = {
   title: ['標題', '議案名稱', '案名', '提案名稱', '名稱'],
   cat: ['分類', '類別', '議案類別', '案別'],
   name: ['提案人姓名', '姓名', '提案人', '提案者'],
-  ptitle: ['提案人職稱', '職稱', '提案人單位', '單位'],
-  cosign: ['連署人數', '連署', '連署數'],
+  ptitle: ['提案人職稱', '職稱', '提案人單位'],
+  unit: ['提案單位', '所屬單位', '單位', '提案機關'],
   date: ['提案日期', '日期', '提案時間'],
   committee: ['審查單位', '審查委員會', '委員會', '交付委員會'],
   summary: ['摘要', '內容', '說明', '提案說明'],
@@ -168,7 +168,7 @@ function toBills(rows) {
       id: get(r, 'id') || String(n + 1), title: get(r, 'title'),
       cat: CATS.indexOf(get(r, 'cat')) !== -1 ? get(r, 'cat') : '一般提案',
       proposer: pname, ptitle: ptitle, proposerFull: ptitle ? pname + '（' + ptitle + '）' : pname,
-      cosign: get(r, 'cosign'), date: get(r, 'date'), committee: get(r, 'committee'),
+      unit: get(r, 'unit'), date: get(r, 'date'), committee: get(r, 'committee'),
       summary: get(r, 'summary'), note: get(r, 'note'),
       files: parseFiles(head, r),
       stage: stage, status: STATUS[statusText] ? statusText : '審查中',
@@ -215,7 +215,7 @@ function render() {
   const list = S.bills.filter((b) =>
     (S.cat === '全部' || b.cat === S.cat) &&
     (S.status === '全部' || b.status === S.status) &&
-    (!q || (b.title + b.proposerFull + b.id + b.committee).toLowerCase().indexOf(q) !== -1));
+    (!q || (b.title + b.proposerFull + b.unit + b.id + b.committee).toLowerCase().indexOf(q) !== -1));
 
   $('count').textContent = '共 ' + list.length + ' 件議案';
   $('list').innerHTML = list.length ? list.map((b) => {
@@ -233,7 +233,7 @@ function render() {
       (open ? '<div class="detail">' +
         (b.summary ? '<p>' + esc(b.summary) + '</p>' : '') +
         '<dl><div><dt>提案人</dt><dd>' + esc(b.proposerFull) + '</dd></div>' +
-        '<div><dt>連署人數</dt><dd>' + esc(b.cosign) + ' 人</dd></div>' +
+        '<div><dt>提案單位</dt><dd>' + esc(b.unit || '—') + '</dd></div>' +
         '<div><dt>審查單位</dt><dd>' + esc(b.committee) + '</dd></div></dl>' +
         (b.files.length ? '<div><div style="font-size:15px;font-weight:700;margin-bottom:4px">附件</div><ul class="files">' +
           b.files.map((f) => '<li><a href="' + esc(f.url) + '" target="_blank" rel="noopener noreferrer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>' + esc(f.name) + '</a></li>').join('') +
