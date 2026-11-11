@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>學生議會議案查詢</title>
+<title>國立臺北大學三峽校區學生議會</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
 <style>
@@ -62,7 +62,7 @@ footer{padding-top:32px;display:flex;flex-direction:column;gap:6px;font-size:15p
   <section class="tools" aria-label="搜尋與篩選">
     <div>
       <label class="q" for="q">搜尋議案</label>
-      <input id="q" type="search" placeholder="例如：組織法、林某某、27-006" autocomplete="off">
+      <input id="q" type="search" placeholder="例如：修正案、林某某、27-007" autocomplete="off">
     </div>
     <div class="row" role="group" aria-label="依分類篩選"><span class="tag">分類</span><span id="cats" class="row"></span></div>
     <div class="row" role="group" aria-label="依狀態篩選"><span class="tag">狀態</span><span id="stats" class="row"></span></div>
@@ -73,7 +73,7 @@ footer{padding-top:32px;display:flex;flex-direction:column;gap:6px;font-size:15p
 
   <footer>
     <div id="updated"></div>
-    <div>對議案內容有疑問，請洽議事組：ntpuscs@gmail.com</div>
+    <div>對議案內容有疑問，請洽議事組：[聯絡信箱或社群帳號]</div>
   </footer>
 </div>
 
@@ -81,7 +81,7 @@ footer{padding-top:32px;display:flex;flex-direction:column;gap:6px;font-size:15p
 /* ★ 唯一需要設定的地方：貼上「發布到網路」的 CSV 網址
    取得方式：試算表 → 檔案 → 分享 → 發布到網路 → 選「議案」工作表與「逗號分隔值 (.csv)」→ 發布 */
 const SHEET_API_URL = '';  // ★ 貼上 Apps Script「網頁應用程式網址」（結尾 /exec），優先使用
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTpmcb-SNX4oNyKistKmsGQVmQrddPFijU-XKJ6vL7bF_Po11pqG_6cJzDPbYkCfGR7RjdPTgOjkID8/pub?gid=1254595337&single=true&output=csv';
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTGMyw1bs7ARdUCMK3s_Z3s8CyJQ3NgkM76MqLwQoHSnGb7u7NOo3T8DMFymkNjJWXNpR6gaBVbPZg4/pub?output=csv';
 
 // 欄位別名：試算表表頭只要符合其中一個名稱就能讀到（可自行增加）
 const ALIASES = {
@@ -100,8 +100,9 @@ const ALIASES = {
 };
 const MAX_FILES = 5; // 附件欄位：附件1 ~ 附件5，儲存格寫「顯示名稱 | 網址」或直接貼網址
 
+const CATS = ['一般提案','法律案','財務案','人事案','報告案','備查案'];
+
 const STAGES = ['提案送出','形式審查','一讀','委員會審查','二讀','送出本會','公告'];
-const CATS = ['一般提案','法律案','財務案','人事案'];
 const STATUS = {
   '審查中':{bg:'#E3ECF9',fg:'#17407F'},
   '已通過':{bg:'#1D2230',fg:'#F7F4EC'},
@@ -176,8 +177,15 @@ function toBills(rows) {
   });
 }
 
+// 顯示規則：這些分類的下列關卡不適用（只影響網頁顯示，不影響試算表格式）
+const NA_STAGES = ['委員會審查','二讀','送出本會','公告'];
+const NA_CATS = ['報告案','備查案','一般提案','人事案'];
+const isNA = (b, label) => NA_CATS.indexOf(b.cat) !== -1 && NA_STAGES.indexOf(label) !== -1;
+const shadow = (s) => (s.na ? ';box-shadow:inset 0 0 0 1px #A9A395' : '');
+
 function steps(b) {
   return STAGES.map((label, i) => {
+    if (isNA(b, label)) return { label: label, bar: 'transparent', tag: '不適用', tc: '#5A6070', lc: '#5A6070', na: true };
     let st;
     if (b.status === '已通過' || i < b.stage) st = 'done';
     else if (i === b.stage) st = b.status === '審查中' ? 'current' : (b.status === '已退回' ? 'returned' : 'withdrawn');
@@ -194,7 +202,11 @@ function steps(b) {
 }
 
 function currentLabel(b) {
-  if (b.status === '已通過') return '已通過，並已公告';
+  if (b.status === '已通過') {
+    if (b.cat === '報告案') return '已洽悉';
+    if (b.cat === '備查案') return '准予備查';
+    return isNA(b, '公告') ? '已通過' : '已通過，並已公告';
+  }
   if (b.status === '已退回') return '在「' + STAGES[b.stage] + '」被退回';
   if (b.status === '已撤案') return '在「' + STAGES[b.stage] + '」撤案';
   return STAGES[b.stage];
@@ -227,7 +239,7 @@ function render() {
       '<h2><button type="button" data-open="' + esc(b.id) + '" aria-expanded="' + open + '">' + esc(b.title) + '</button></h2>' +
       '<div class="meta"><span>提案人：<strong>' + esc(b.proposer) + '</strong>' + (b.ptitle ? '（' + esc(b.ptitle) + '）' : '') + '</span><span>' + esc(b.date) + ' 提案</span></div>' +
       '<div><div class="bar" role="img" aria-label="共 ' + STAGES.length + ' 關，目前：' + esc(currentLabel(b)) + '">' +
-        sp.map((s) => '<i style="background:' + s.bar + '"></i>').join('') + '</div>' +
+        sp.map((s) => '<i style="background:' + s.bar + shadow(s) + '"></i>').join('') + '</div>' +
       '<div class="cur">目前進度：' + esc(currentLabel(b)) + '</div></div>' +
       '<div><button type="button" class="more" data-open="' + esc(b.id) + '" aria-expanded="' + open + '">' + (open ? '收合詳情' : '查看詳情') + '</button></div>' +
       (open ? '<div class="detail">' +
@@ -239,7 +251,7 @@ function render() {
           b.files.map((f) => '<li><a href="' + esc(f.url) + '" target="_blank" rel="noopener noreferrer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>' + esc(f.name) + '</a></li>').join('') +
         '</ul></div>' : '') +
         '<div><div style="font-size:15px;font-weight:700;margin-bottom:12px">審查歷程</div><div class="steps">' +
-          sp.map((s) => '<div class="step"><i style="background:' + s.bar + '"></i><b style="color:' + s.lc + '">' + s.label + '</b><span class="t" style="color:' + s.tc + '">' + s.tag + '</span></div>').join('') +
+          sp.map((s) => '<div class="step"><i style="background:' + s.bar + shadow(s) + '"></i><b style="color:' + s.lc + '">' + s.label + '</b><span class="t" style="color:' + s.tc + '">' + s.tag + '</span></div>').join('') +
         '</div></div>' +
         (b.note ? '<div class="note"><strong>最新說明：</strong>' + esc(b.note) + '</div>' : '') +
       '</div>' : '') +
