@@ -461,7 +461,7 @@ const SP2 = '　　', SP5 = '　　　　　';
 
 function buildAgenda(rep, disc) {
   return ['【議程】', '一、開會', '二、主席致詞', '三、確認議程', '四、報告事項', '　（一）確認前次會議紀錄']
-    .concat(rep.map((it, i) => '　（' + cn(i + 2) + '）報告【' + it.b.title + '】'))
+    .concat(rep.map((it, i) => '　（' + cn(i + 2) + '）【' + it.b.title + '】'))
     .concat(['五、答問時段', '六、討論事項'])
     .concat(disc.map((it, i) => '　（' + cn(i + 1) + '）審查【' + it.b.title + '】'))
     .concat(['七、會務質詢', '八、臨時動議', '九、散會']).join('\n');
