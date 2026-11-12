@@ -149,7 +149,7 @@ footer{padding-top:32px;display:flex;flex-direction:column;gap:6px;font-size:15p
 <script>
 /* ★ 唯一需要設定的地方：貼上「發布到網路」的 CSV 網址
    取得方式：試算表 → 檔案 → 分享 → 發布到網路 → 選「議案」工作表與「逗號分隔值 (.csv)」→ 發布 */
-const SHEET_API_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTpmcb-SNX4oNyKistKmsGQVmQrddPFijU-XKJ6vL7bF_Po11pqG_6cJzDPbYkCfGR7RjdPTgOjkID8/pub?gid=1254595337&single=true&output=csv';  // ★ 貼上 Apps Script「網頁應用程式網址」（結尾 /exec），優先使用
+const SHEET_API_URL = '';  // ★ 貼上 Apps Script「網頁應用程式網址」（結尾 /exec），優先使用
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTpmcb-SNX4oNyKistKmsGQVmQrddPFijU-XKJ6vL7bF_Po11pqG_6cJzDPbYkCfGR7RjdPTgOjkID8/pub?gid=1254595337&single=true&output=csv';
 
 // 欄位別名：試算表表頭只要符合其中一個名稱就能讀到（可自行增加）
@@ -429,7 +429,7 @@ function cn(n) {
   if (n < 100) return CN[Math.floor(n / 10)] + '十' + (n % 10 ? CN[n % 10] : '');
   return String(n);
 }
-// 編號比對：全形轉半形、忽略空白與大小寫、數字前面的 0 不影響（27-1 與 27-001 視為相同）
+// 編號比對：全形轉半形、忽略空白與大小寫、數字前面的 0 不影響（27-1 與 27-001 視為相同），可省略前綴
 const normId = (x) => String(x == null ? '' : x).normalize('NFKC').replace(/[–—−﹣－]/g, '-').replace(/\s+/g, '').toUpperCase()
   .split('-').map((p) => (/^\d+$/.test(p) ? String(parseInt(p, 10)) : p)).join('-');
 
@@ -444,7 +444,8 @@ function makeAgenda() {
     const key = normId(orig);
     if (seen[key]) { dup.push(orig); return; }
     seen[key] = true;
-    const b = S.bills.find((x) => normId(x.id) === key);
+    // 先找完全相同的編號；找不到時，允許省略前綴（例如只打 27-001 也能對到 NTPUSP-27-001）
+    const b = S.bills.find((x) => normId(x.id) === key) || S.bills.find((x) => normId(x.id).endsWith('-' + key));
     b ? found.push(b) : missing.push(orig);
   });
   const lines = ['【議程】', '一、開會', '二、主席致詞', '三、確認議程', '四、報告事項', '五、答問時段', '六、討論事項']
