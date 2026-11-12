@@ -292,10 +292,23 @@ function currentLabel(b) {
   return STAGES[b.stage];
 }
 
+// 狀態名稱依分類顯示：報告案的「已通過」顯示為「已洽悉」，備查案顯示為「准予備查」
+function statusText(status, cat) {
+  if (status === '已通過' && cat === '報告案') return '已洽悉';
+  if (status === '已通過' && cat === '備查案') return '准予備查';
+  return status;
+}
+
 function chips(el, names, current, cls, key) {
+  if (key === 'status' && S.cat !== '全部') {
+    // 選了分類時，只顯示該分類有的狀態（目前選中的一定保留）
+    names = names.filter((n) => n === '全部' || n === current || S.bills.some((b) => b.cat === S.cat && b.status === n));
+  }
   el.innerHTML = names.map((n) => {
-    const c = n === '全部' ? S.bills.length : S.bills.filter((b) => (key === 'cat' ? b.cat : b.status) === n).length;
-    return '<button type="button" class="chip ' + cls + '" data-' + key + '="' + esc(n) + '" aria-pressed="' + (n === current) + '">' + esc(n) + '（' + c + '）</button>';
+    // 狀態的數字只算目前選的分類（例如選「一般提案」，就只統計一般提案的各狀態）
+    const pool = key === 'status' && S.cat !== '全部' ? S.bills.filter((b) => b.cat === S.cat) : S.bills;
+    const c = n === '全部' ? pool.length : pool.filter((b) => (key === 'cat' ? b.cat : b.status) === n).length;
+    return '<button type="button" class="chip ' + cls + '" data-' + key + '="' + esc(n) + '" aria-pressed="' + (n === current) + '">' + esc(key === 'status' ? statusText(n, S.cat) : n) + '（' + c + '）</button>';
   }).join('');
 }
 
@@ -314,7 +327,7 @@ function render() {
     const st = STATUS[b.status], sp = steps(b), open = S.open === b.id;
     return '<article>' +
       '<div class="head"><span class="id">議案 ' + esc(b.id) + '</span>' +
-      '<span class="badge" style="background:' + st.bg + ';color:' + st.fg + '">' + esc(b.status) + '</span>' +
+      '<span class="badge" style="background:' + st.bg + ';color:' + st.fg + '">' + esc(statusText(b.status, b.cat)) + '</span>' +
       '<span class="cat">' + esc(b.cat) + '</span></div>' +
       '<h2><button type="button" data-open="' + esc(b.id) + '" aria-expanded="' + open + '">' + esc(b.title) + '</button></h2>' +
       '<div class="meta"><span>提案人：<strong>' + esc(b.proposer) + '</strong>' + (b.ptitle ? '（' + esc(b.ptitle) + '）' : '') + (b.unit ? '（' + esc(b.unit) + '）' : '') + '</span><span>' + esc(b.date) + ' 提案</span></div>' +
@@ -340,7 +353,11 @@ function render() {
 
 document.addEventListener('click', (e) => {
   const t = e.target.closest('button'); if (!t) return;
-  if (t.dataset.cat) S.cat = t.dataset.cat;
+  if (t.dataset.cat) {
+    S.cat = t.dataset.cat;
+    // 換分類後，如果原本選的狀態在這個分類沒有議案，就回到「全部」
+    if (S.cat !== '全部' && S.status !== '全部' && !S.bills.some((b) => b.cat === S.cat && b.status === S.status)) S.status = '全部';
+  }
   else if (t.dataset.status) S.status = t.dataset.status;
   else if (t.dataset.open) S.open = S.open === t.dataset.open ? null : t.dataset.open;
   else return;
@@ -461,7 +478,7 @@ const SP2 = '　　', SP5 = '　　　　　';
 
 function buildAgenda(rep, disc) {
   return ['【議程】', '一、開會', '二、主席致詞', '三、確認議程', '四、報告事項', '　（一）確認前次會議紀錄']
-    .concat(rep.map((it, i) => '　（' + cn(i + 2) + '）【' + it.b.title + '】'))
+    .concat(rep.map((it, i) => '　（' + cn(i + 2) + '）報告【' + it.b.title + '】'))
     .concat(['五、答問時段', '六、討論事項'])
     .concat(disc.map((it, i) => '　（' + cn(i + 1) + '）審查【' + it.b.title + '】'))
     .concat(['七、會務質詢', '八、臨時動議', '九、散會']).join('\n');
