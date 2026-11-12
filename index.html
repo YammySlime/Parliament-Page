@@ -128,20 +128,30 @@ footer{padding-top:32px;display:flex;flex-direction:column;gap:6px;font-size:15p
         <button type="button" class="secbtn" id="logout">登出</button>
       </div>
     </div>
-    <h1>議程草擬系統</h1>
-    <p class="intro">輸入要討論的議案編號，自動產生議程草稿。</p>
+    <h1>議程與會議記錄草擬系統</h1>
+    <p class="intro">分別輸入報告事項與討論事項的議案編號，一次產生議程與會議記錄草稿。</p>
   </header>
-  <section class="agenda" aria-label="議程草擬">
-    <label for="agIds">議案編號</label>
-    <input id="agIds" type="text" placeholder="例如：27-001、27-002、27-003" autocomplete="off">
-    <p class="hint">用頓號、逗號或空格分開，議程會依輸入的順序排列。</p>
-    <div class="btnrow"><button type="button" class="primary" id="agMake" style="margin-top:4px">產生議程</button></div>
+  <section class="agenda" aria-label="議程與會議記錄草擬">
+    <label for="agReport">報告事項　議案編號</label>
+    <input id="agReport" type="text" placeholder="例如：27-001、27-002（沒有就留空）" autocomplete="off">
+    <label for="agDisc" style="margin-top:8px">討論事項　議案編號</label>
+    <input id="agDisc" type="text" placeholder="例如：27-003、27-004" autocomplete="off">
+    <p class="hint">用頓號、逗號或空格分開，依輸入的順序排列。編號可以省略前綴，打 27-001 即可。</p>
+    <div class="btnrow"><button type="button" class="primary" id="agMake" style="margin-top:4px">產生議程與會議記錄</button></div>
     <p class="msg" id="agMsg" role="status"></p>
-    <label for="agOut">議程草稿（可直接修改）</label>
+
+    <label for="agOut" style="margin-top:8px">議程草稿（可直接修改）</label>
     <textarea id="agOut" spellcheck="false"></textarea>
     <div class="btnrow">
       <button type="button" class="secbtn" id="agCopy">複製議程</button>
-      <button type="button" class="secbtn" id="agDown">下載文字檔</button>
+      <button type="button" class="secbtn" id="agDown">下載議程</button>
+    </div>
+
+    <label for="mnOut" style="margin-top:24px">會議記錄草稿（可直接修改）</label>
+    <textarea id="mnOut" spellcheck="false"></textarea>
+    <div class="btnrow">
+      <button type="button" class="secbtn" id="mnCopy">複製會議記錄</button>
+      <button type="button" class="secbtn" id="mnDown">下載會議記錄</button>
     </div>
   </section>
 </div>
@@ -421,7 +431,7 @@ $('loginForm').addEventListener('submit', (e) => {
   }
 });
 
-/* ====== 議程草擬 ====== */
+/* ====== 議程與會議記錄草擬 ====== */
 const CN = '零一二三四五六七八九';
 function cn(n) {
   if (n < 10) return CN[n];
@@ -433,26 +443,64 @@ function cn(n) {
 const normId = (x) => String(x == null ? '' : x).normalize('NFKC').replace(/[–—−﹣－]/g, '-').replace(/\s+/g, '').toUpperCase()
   .split('-').map((p) => (/^\d+$/.test(p) ? String(parseInt(p, 10)) : p)).join('-');
 
-function makeAgenda() {
-  const msg = $('agMsg'); msg.textContent = '';
-  const raw = $('agIds').value.split(/[、,，;；\s]+/).map((x) => x.trim()).filter(Boolean);
-  if (!raw.length) { msg.textContent = '請先輸入至少一個議案編號。'; return; }
-  if (!S.bills.length) { msg.textContent = S.err ? ('議案資料讀取失敗：' + S.err) : '議案資料還沒載入完成，請稍候再試一次。'; return; }
-  if (S.noIdCol) { msg.textContent = '試算表裡找不到「編號」欄（表頭請寫「編號」），所以無法依編號查詢。'; return; }
-  const seen = {}, found = [], missing = [], dup = [];
-  raw.forEach((orig) => {
+// 把一欄輸入的編號對應到議案；回傳 { items: [{ b, orig }], missing, dup }
+function resolveIds(text, seen) {
+  const out = { items: [], missing: [], dup: [] };
+  text.split(/[、,，;；\s]+/).map((x) => x.trim()).filter(Boolean).forEach((orig) => {
     const key = normId(orig);
-    if (seen[key]) { dup.push(orig); return; }
+    if (seen[key]) { out.dup.push(orig); return; }
     seen[key] = true;
     // 先找完全相同的編號；找不到時，允許省略前綴（例如只打 27-001 也能對到 NTPUSP-27-001）
     const b = S.bills.find((x) => normId(x.id) === key) || S.bills.find((x) => normId(x.id).endsWith('-' + key));
-    b ? found.push(b) : missing.push(orig);
+    b ? out.items.push({ b: b, orig: orig.normalize('NFKC') }) : out.missing.push(orig);
   });
-  const lines = ['【議程】', '一、開會', '二、主席致詞', '三、確認議程', '四、報告事項', '五、答問時段', '六、討論事項']
-    .concat(found.map((b, i) => '　（' + cn(i + 1) + '）審查【' + b.title + '】'))
-    .concat(['七、會務質詢', '八、臨時動議', '九、散會']);
-  $('agOut').value = lines.join('\n');
+  return out;
+}
+
+const SP2 = '　　', SP5 = '　　　　　';
+
+function buildAgenda(rep, disc) {
+  return ['【議程】', '一、開會', '二、主席致詞', '三、確認議程', '四、報告事項', '　（一）確認前次會議紀錄']
+    .concat(rep.map((it, i) => '　（' + cn(i + 2) + '）報告【' + it.b.title + '】'))
+    .concat(['五、答問時段', '六、討論事項'])
+    .concat(disc.map((it, i) => '　（' + cn(i + 1) + '）審查【' + it.b.title + '】'))
+    .concat(['七、會務質詢', '八、臨時動議', '九、散會']).join('\n');
+}
+
+function buildMinutes(rep, disc) {
+  const L = ['一、開會。', '二、主席致詞。', '三、確認議程。', SP2 + '本次議程認可。', '四、報告事項。',
+    SP2 + '（一）確認前次會議紀錄。', SP5 + '決議：前次會議紀錄認可。'];
+  rep.forEach((it, i) => {
+    L.push(SP2 + '（' + cn(i + 2) + '）' + it.orig + '【' + it.b.title + '】');
+    L.push(SP5 + '決議：' + (it.b.cat === '備查案' ? '准予備查。' : '已洽悉。'));
+  });
+  L.push('五、答問時段', SP2 + '詳見會議影音。', '六、討論事項。');
+  disc.forEach((it, i) => {
+    L.push('　第' + cn(i + 1) + '案',
+      SP2 + '審查' + it.orig + '【' + it.b.title + '】',
+      SP2 + '說明：',
+      SP2 + '附件：詳見提案系統',
+      SP2 + '決議：',
+      SP2 + '一、經提案者說明、本會議員詢答完畢。',
+      SP2 + '二、議員提案包裹表決，議員附議，通過。',
+      SP2 + '三、全案，同意票0票，不同意票0票，贊成者多數，通過。');
+  });
+  L.push('七、會務質詢。', SP2 + '詳見會議影音。', '八、臨時動議。', '九、散會。');
+  return L.join('\n');
+}
+
+function makeAgenda() {
+  const msg = $('agMsg'); msg.textContent = '';
+  const rText = $('agReport').value, dText = $('agDisc').value;
+  if (!rText.trim() && !dText.trim()) { msg.textContent = '請至少輸入一個議案編號（報告事項或討論事項）。'; return; }
+  if (!S.bills.length) { msg.textContent = S.err ? ('議案資料讀取失敗：' + S.err) : '議案資料還沒載入完成，請稍候再試一次。'; return; }
+  if (S.noIdCol) { msg.textContent = '試算表裡找不到「編號」欄（表頭請寫「編號」），所以無法依編號查詢。'; return; }
+  const seen = {};
+  const rep = resolveIds(rText, seen), disc = resolveIds(dText, seen);
+  $('agOut').value = buildAgenda(rep.items, disc.items);
+  $('mnOut').value = buildMinutes(rep.items, disc.items);
   const notes = [];
+  const missing = rep.missing.concat(disc.missing), dup = rep.dup.concat(disc.dup);
   if (missing.length) {
     const sample = S.bills.slice(0, 5).map((b) => b.id).join('、');
     notes.push('找不到這些編號，已略過：' + missing.join('、') + '。目前讀到 ' + S.bills.length + ' 筆議案，編號例如：' + sample + '。');
@@ -461,19 +509,24 @@ function makeAgenda() {
   msg.textContent = notes.join('');
 }
 $('agMake').addEventListener('click', makeAgenda);
-$('agIds').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); makeAgenda(); } });
-$('agCopy').addEventListener('click', async () => {
-  const t = $('agOut').value; if (!t) return;
-  try { await navigator.clipboard.writeText(t); }
-  catch (err) { $('agOut').select(); document.execCommand('copy'); }
-  $('agMsg').textContent = '已複製議程。';
-});
-$('agDown').addEventListener('click', () => {
-  const t = $('agOut').value; if (!t) return;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([t], { type: 'text/plain;charset=utf-8' }));
-  a.download = '議程.txt'; a.click(); URL.revokeObjectURL(a.href);
-});
+['agReport', 'agDisc'].forEach((id) => $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); makeAgenda(); } }));
+
+function wireOut(copyId, downId, taId, filename, doneText) {
+  $(copyId).addEventListener('click', async () => {
+    const t = $(taId).value; if (!t) return;
+    try { await navigator.clipboard.writeText(t); }
+    catch (err) { $(taId).select(); document.execCommand('copy'); }
+    $('agMsg').textContent = doneText;
+  });
+  $(downId).addEventListener('click', () => {
+    const t = $(taId).value; if (!t) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([t], { type: 'text/plain;charset=utf-8' }));
+    a.download = filename; a.click(); URL.revokeObjectURL(a.href);
+  });
+}
+wireOut('agCopy', 'agDown', 'agOut', '議程.txt', '已複製議程。');
+wireOut('mnCopy', 'mnDown', 'mnOut', '會議記錄.txt', '已複製會議記錄。');
 
 load();
 </script>
